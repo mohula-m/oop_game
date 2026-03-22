@@ -20,7 +20,8 @@ public class GamePanel extends JPanel implements Runnable {
 
     public GamePanel() {
         tileMap = new TileMap();
-        player  = new Player(TileMap.TILE_SIZE + 2, TileMap.TILE_SIZE + 2, keyHandler, tileMap);
+        // Start player just above the floor (row 10, col 1)
+        player  = new Player(TileMap.TILE_SIZE + 2, 10 * TileMap.TILE_SIZE - 44, keyHandler, tileMap);
 
         setPreferredSize(new Dimension(tileMap.getPixelWidth(), tileMap.getPixelHeight()));
         setBackground(Color.DARK_GRAY);

@@ -9,9 +9,16 @@ import java.awt.Graphics2D;
 // Inheritance: Player extends Entity
 public class Player extends Entity {
 
+    private static final float GRAVITY       = 0.5f;
+    private static final float JUMP_FORCE    = -12f;
+    private static final float MAX_FALL_SPEED = 16f;
+
     private final int speed;
     private final KeyHandler keyHandler;
     private final TileMap tileMap;
+
+    private float velocityY = 0;
+    private boolean onGround = false;
 
     public Player(int x, int y, KeyHandler keyHandler, TileMap tileMap) {
         super(x, y, 44, 44);
@@ -23,12 +30,36 @@ public class Player extends Entity {
     // Overriding: concrete implementation of Entity.update()
     @Override
     public void update() {
-        int dx = 0, dy = 0;
-        if (keyHandler.up)    dy -= speed;
-        if (keyHandler.down)  dy += speed;
+        // Check if standing on something
+        onGround = tileMap.collidesWithSolid(x, y + 1, width, height);
+
+        // Jump only when on the ground
+        if (keyHandler.jump && onGround) {
+            velocityY = JUMP_FORCE;
+        }
+
+        // Gravity pulls down every frame
+        velocityY += GRAVITY;
+        if (velocityY > MAX_FALL_SPEED) velocityY = MAX_FALL_SPEED;
+
+        // Horizontal movement
+        int dx = 0;
         if (keyHandler.left)  dx -= speed;
         if (keyHandler.right) dx += speed;
-        move(dx, dy);
+        move(dx, 0);
+
+        // Vertical movement with collision
+        int dy = (int) velocityY;
+        if (tileMap.collidesWithSolid(x, y + dy, width, height)) {
+            // Slide pixel-by-pixel to the exact edge
+            int step = dy > 0 ? 1 : -1;
+            while (!tileMap.collidesWithSolid(x, y + step, width, height)) {
+                y += step;
+            }
+            velocityY = 0;
+        } else {
+            y += dy;
+        }
     }
 
     // Overloading: move by delta with collision check
@@ -46,6 +77,9 @@ public class Player extends Entity {
             move(dx, dy);
         }
     }
+
+    public boolean isOnGround() { return onGround; }
+    public float getVelocityY() { return velocityY; }
 
     // Overriding: draw as solid black square
     @Override
