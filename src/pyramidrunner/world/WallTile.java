@@ -9,6 +9,10 @@ public class WallTile extends Tile {
     private static final Color FILL   = new Color(70, 45, 15);
     private static final Color BORDER = Color.BLACK;
 
+    public WallTile() {
+        super(true); // solid = true
+    }
+
     @Override
     public boolean isSolid() {
         return true;

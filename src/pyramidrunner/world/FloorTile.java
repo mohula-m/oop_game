@@ -6,8 +6,12 @@ import java.awt.Graphics2D;
 // Inheritance: FloorTile extends Tile
 public class FloorTile extends Tile {
 
-    private static final Color FILL  = new Color(140, 90, 40);
+    private static final Color FILL   = new Color(140, 90, 40);
     private static final Color BORDER = Color.BLACK;
+
+    public FloorTile() {
+        super(false); // solid = false
+    }
 
     @Override
     public boolean isSolid() {
