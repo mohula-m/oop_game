@@ -1,3 +1,4 @@
+import pyramidrunner.entity.Door;
 import pyramidrunner.entity.Player;
 import pyramidrunner.input.KeyHandler;
 import pyramidrunner.world.TileMap;
@@ -5,6 +6,7 @@ import pyramidrunner.world.TileMap;
 import javax.swing.JPanel;
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
@@ -17,11 +19,14 @@ public class GamePanel extends JPanel implements Runnable {
     private final KeyHandler keyHandler = new KeyHandler();
     private final TileMap tileMap;
     private final Player player;
+    private final Door door;
 
     public GamePanel() {
         tileMap = new TileMap();
         // Start player just above the floor (row 10, col 1)
-        player  = new Player(TileMap.TILE_SIZE + 2, 10 * TileMap.TILE_SIZE - 44, keyHandler, tileMap);
+        player = new Player(TileMap.TILE_SIZE + 2, 10 * TileMap.TILE_SIZE - 44, keyHandler, tileMap);
+        // Door at tile col=13, row=10 (bottom-right, above the floor)
+        door   = new Door(14, 1);
 
         setPreferredSize(new Dimension(tileMap.getPixelWidth(), tileMap.getPixelHeight()));
         setBackground(Color.DARK_GRAY);
@@ -54,7 +59,10 @@ public class GamePanel extends JPanel implements Runnable {
     }
 
     private void update() {
-        player.update();
+        if (!door.isTriggered()) {
+            player.update();
+        }
+        door.checkPlayer(player);
     }
 
     @Override
@@ -64,7 +72,21 @@ public class GamePanel extends JPanel implements Runnable {
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
         tileMap.draw(g2);
+        door.draw(g2);
         player.draw(g2);
+
+        if (door.isTriggered()) {
+            // Semi-transparent overlay
+            g2.setColor(new Color(0, 0, 0, 150));
+            g2.fillRect(0, 0, getWidth(), getHeight());
+            // "Level Complete" text
+            g2.setColor(Color.YELLOW);
+            g2.setFont(new Font("Arial", Font.BOLD, 48));
+            String msg = "LEVEL COMPLETE!";
+            int msgX = (getWidth()  - g2.getFontMetrics().stringWidth(msg)) / 2;
+            int msgY = getHeight() / 2;
+            g2.drawString(msg, msgX, msgY);
+        }
 
         g2.dispose();
     }

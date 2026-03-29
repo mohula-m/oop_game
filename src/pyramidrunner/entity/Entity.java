@@ -23,6 +23,13 @@ public abstract class Entity {
     public abstract void draw(Graphics2D g);
     public abstract void draw(Graphics2D g, Color color);
 
+    public boolean intersects(Entity other) {
+        return x < other.x + other.width
+            && x + width  > other.x
+            && y < other.y + other.height
+            && y + height > other.y;
+    }
+
     public int getX()      { return x; }
     public int getY()      { return y; }
     public int getWidth()  { return width; }

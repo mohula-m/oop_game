@@ -22,6 +22,8 @@ public class TileMap {
         {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},  // floor
     };
 
+    // Composition: TileMap OWNS Tile[][] — tiles are created inside TileMap
+    // and do not exist outside of it (their lifecycle is bound to TileMap)
     private final Tile[][] tiles;
     private final int rows;
     private final int cols;

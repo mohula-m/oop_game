@@ -10,11 +10,14 @@ import java.awt.Graphics2D;
 public class Player extends Entity {
 
     private static final float GRAVITY       = 0.5f;
-    private static final float JUMP_FORCE    = -12f;
+    private static final float JUMP_FORCE    = -14f;
     private static final float MAX_FALL_SPEED = 16f;
 
     private final int speed;
+
+    // Aggregation: Player HAS-A KeyHandler (received from outside, exists independently)
     private final KeyHandler keyHandler;
+    // Aggregation: Player HAS-A TileMap (received from outside, exists independently)
     private final TileMap tileMap;
 
     private float velocityY = 0;
