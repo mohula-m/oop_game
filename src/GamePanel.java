@@ -13,7 +13,7 @@ import java.awt.RenderingHints;
 
 public class GamePanel extends JPanel implements Runnable {
 
-    private static final int FPS = 60;
+    private static final int FPS = 90;
 
     private Thread gameThread;
     private final KeyHandler keyHandler = new KeyHandler();
@@ -23,10 +23,10 @@ public class GamePanel extends JPanel implements Runnable {
 
     public GamePanel() {
         tileMap = new TileMap();
-        // Start player just above the floor (row 10, col 1)
-        player = new Player(TileMap.TILE_SIZE + 2, 10 * TileMap.TILE_SIZE - 44, keyHandler, tileMap);
-        // Door at tile col=13, row=10 (bottom-right, above the floor)
-        door   = new Door(14, 1);
+        // Player starts bottom-left, just above the floor (row 14, col 1)
+        player = new Player(TileMap.TILE_SIZE + 2, 14 * TileMap.TILE_SIZE - 44, keyHandler, tileMap);
+        // Door at top-right corner (row 1, col 22)
+        door   = new Door(22, 1);
 
         setPreferredSize(new Dimension(tileMap.getPixelWidth(), tileMap.getPixelHeight()));
         setBackground(Color.DARK_GRAY);

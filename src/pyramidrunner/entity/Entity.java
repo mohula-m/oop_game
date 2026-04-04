@@ -1,10 +1,13 @@
 package pyramidrunner.entity;
 
+import pyramidrunner.core.Drawable;
+import pyramidrunner.core.Updatable;
 import java.awt.Color;
 import java.awt.Graphics2D;
 
 // Generalization: Entity is the abstract base for all game objects
-public abstract class Entity {
+// Implements Drawable and Updatable interfaces — forces every subclass to provide draw() and update()
+public abstract class Entity implements Drawable, Updatable {
 
     protected int x, y;
     protected int width, height;
@@ -16,10 +19,10 @@ public abstract class Entity {
         this.height = height;
     }
 
-    // Overriding: subclasses must provide their own update logic
+
     public abstract void update();
 
-    // Compile-time polymorphism (overloading): two draw signatures
+    // overload
     public abstract void draw(Graphics2D g);
     public abstract void draw(Graphics2D g, Color color);
 

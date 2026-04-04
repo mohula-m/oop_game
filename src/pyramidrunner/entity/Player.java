@@ -15,9 +15,9 @@ public class Player extends Entity {
 
     private final int speed;
 
-    // Aggregation: Player HAS-A KeyHandler (received from outside, exists independently)
+    // Aggregation
     private final KeyHandler keyHandler;
-    // Aggregation: Player HAS-A TileMap (received from outside, exists independently)
+    // Aggregation
     private final TileMap tileMap;
 
     private float velocityY = 0;
@@ -30,7 +30,7 @@ public class Player extends Entity {
         this.tileMap = tileMap;
     }
 
-    // Overriding: concrete implementation of Entity.update()
+    // Overriding
     @Override
     public void update() {
         // Check if standing on something
@@ -65,13 +65,13 @@ public class Player extends Entity {
         }
     }
 
-    // Overloading: move by delta with collision check
+    // Overloading:
     public void move(int dx, int dy) {
         if (!tileMap.collidesWithSolid(x + dx, y, width, height)) x += dx;
         if (!tileMap.collidesWithSolid(x, y + dy, width, height)) y += dy;
     }
 
-    // Overloading: move by delta, optionally skipping collision (useful for tests/debug)
+    // Overloading:
     public void move(int dx, int dy, boolean skipCollision) {
         if (skipCollision) {
             x += dx;

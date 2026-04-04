@@ -26,11 +26,11 @@ public class GameTest {
     // Test 1: TileMap — walls are solid, floor is not
     @Test
     void testTileMapSolidity() {
-        // (col=0, row=0) is a border wall — must be solid
+
         assertTrue(tileMap.isSolid(0, 0), "Border wall should be solid");
-        // (col=1, row=1) is empty space — must NOT be solid
+
         assertFalse(tileMap.isSolid(1, 1), "Empty space should not be solid");
-        // Out-of-bounds should be treated as solid
+
         assertTrue(tileMap.isSolid(-1, 0), "Out of bounds should be solid");
     }
 
