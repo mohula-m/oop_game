@@ -1,5 +1,5 @@
+import pyramidrunner.entity.Barrier;
 import pyramidrunner.entity.Door;
-import pyramidrunner.entity.MovingPlatform;
 import pyramidrunner.entity.Player;
 import pyramidrunner.input.KeyHandler;
 import pyramidrunner.world.TileMap;
@@ -11,46 +11,47 @@ import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
-import java.util.List;
 import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Main game panel — handles the game loop, update logic, and rendering.
  *
- * <p>Implements {@link Runnable} so the game loop runs on a dedicated thread
- * (demonstrating multi-threading).</p>
+ * <p>Implements {@link Runnable} so the game loop runs on a dedicated thread.</p>
  *
- * <p>Composition: GamePanel creates and owns TileMap, Player, Door, and
- * the list of MovingPlatforms.</p>
+ * <p>Composition: GamePanel creates and owns TileMap, Player, Door,
+ * and the list of Barriers.</p>
  */
 public class GamePanel extends JPanel implements Runnable {
 
     /** Target frames per second. */
     private static final int FPS = 90;
 
+    /** Player starting X in pixels. */
+    private static final int PLAYER_START_X = TileMap.TILE_SIZE + 2;
+    /** Player starting Y in pixels (row 14, just above the floor). */
+    private static final int PLAYER_START_Y = 14 * TileMap.TILE_SIZE - 44;
+
     private Thread gameThread;
 
-    // Composition: all game objects are created and owned here
-    private final KeyHandler    keyHandler = new KeyHandler();
-    private final TileMap       tileMap;
-    private final Player        player;
-    private final Door          door;
-    private final List<MovingPlatform> platforms;
+    // Composition: all game objects created and owned here
+    private final KeyHandler   keyHandler = new KeyHandler();
+    private final TileMap      tileMap;
+    private       Player       player;
+    private final Door         door;
+    private final List<Barrier> barriers;
+
+    /** True when a barrier has hit the player. Stops updates, shows overlay. */
+    private boolean gameOver = false;
 
     /**
-     * Constructs the game panel, initialises all game objects,
-     * and sets up keyboard input.
+     * Constructs the game panel and initialises all game objects.
      */
     public GamePanel() {
-        tileMap   = new TileMap();
-
-        // Player starts bottom-left, just above the floor (row 14, col 1)
-        player    = new Player(TileMap.TILE_SIZE + 2, 14 * TileMap.TILE_SIZE - 44, keyHandler, tileMap);
-
-        // Exit door placed in the top-right area (row 1, col 22)
-        door      = new Door(22, 1);
-
-        platforms = createPlatforms();
+        tileMap  = new TileMap();
+        player   = new Player(PLAYER_START_X, PLAYER_START_Y, keyHandler, tileMap);
+        door     = new Door(22, 1);
+        barriers = createBarriers();
 
         setPreferredSize(new Dimension(tileMap.getPixelWidth(), tileMap.getPixelHeight()));
         setBackground(Color.DARK_GRAY);
@@ -59,30 +60,38 @@ public class GamePanel extends JPanel implements Runnable {
     }
 
     /**
-     * Builds the list of moving platforms placed across the level.
-     * Encapsulated in its own method to keep the constructor clean.
+     * Creates and positions all barriers in the level.
      *
-     * @return list of configured MovingPlatform objects
+     * @return list of configured Barrier objects
      */
-    private List<MovingPlatform> createPlatforms() {
+    private List<Barrier> createBarriers() {
         int ts = TileMap.TILE_SIZE;
-        List<MovingPlatform> list = new ArrayList<>();
+        List<Barrier> list = new ArrayList<>();
 
-        // Row 6 — wide platform crossing the middle gap
-        list.add(new MovingPlatform(3 * ts, 6 * ts, 3 * ts, 15 * ts, 2f));
+        // Row 4 — tall barrier patrolling the upper section
+        list.add(new Barrier(5 * ts, 4 * ts - 36, 20, 36, 16 * ts, 2.5f));
 
-        // Row 10 — medium platform in the lower section
-        list.add(new MovingPlatform(4 * ts, 10 * ts, 2 * ts, 17 * ts, 1.5f));
+        // Row 8 — wide barrier in the mid section
+        list.add(new Barrier(3 * ts, 8 * ts - 36, 20, 36, 18 * ts, 2f));
 
-        // Row 12 — fast platform near the floor
-        list.add(new MovingPlatform(2 * ts, 12 * ts, 3 * ts, 12 * ts, 3f));
+        // Row 12 — fast narrow barrier near the floor
+        list.add(new Barrier(6 * ts, 12 * ts - 36, 16, 36, 14 * ts, 3.5f));
 
         return list;
     }
 
     /**
+     * Resets the game to its initial state after Game Over.
+     * Recreates the player and resets door and gameOver flag.
+     */
+    private void resetGame() {
+        player   = new Player(PLAYER_START_X, PLAYER_START_Y, keyHandler, tileMap);
+        door.reset();
+        gameOver = false;
+    }
+
+    /**
      * Starts the game loop on a new thread.
-     * The thread calls {@link #run()} which drives update and render.
      */
     public void startGameThread() {
         gameThread = new Thread(this);
@@ -90,8 +99,7 @@ public class GamePanel extends JPanel implements Runnable {
     }
 
     /**
-     * Game loop body — runs at a fixed 90 FPS using a delta-time accumulator.
-     * Calls {@link #update()} and {@link #repaint()} once per logical frame.
+     * Game loop — runs at 90 FPS using a delta-time accumulator.
      */
     @Override
     public void run() {
@@ -113,49 +121,47 @@ public class GamePanel extends JPanel implements Runnable {
     }
 
     /**
-     * Advances the game state by one frame:
-     * <ol>
-     *   <li>Updates each moving platform.</li>
-     *   <li>Carries the player horizontally when standing on a platform.</li>
-     *   <li>Updates the player (input, gravity, tile collision).</li>
-     *   <li>Snaps player to any platform they just landed on.</li>
-     *   <li>Checks if the player reached the exit door.</li>
-     * </ol>
+     * Advances the game by one frame.
+     *
+     * <ul>
+     *   <li>If Game Over — waits for R to restart.</li>
+     *   <li>Otherwise — updates barriers, player, checks collisions.</li>
+     * </ul>
      */
     private void update() {
-        if (!door.isTriggered()) {
+        // Restart on R when game is over or level is complete
+        if ((gameOver || door.isTriggered()) && keyHandler.restart) {
+            resetGame();
+            return;
+        }
 
-            // 1. Update platforms, carry player horizontally and flag onPlatform
-            boolean playerOnPlatform = false;
-            for (MovingPlatform p : platforms) {
-                p.update();
-                if (p.isEntityOnTop(player)) {
-                    player.move(p.getDeltaX(), 0, true);
-                    playerOnPlatform = true;
-                }
-            }
-            // Tell the player BEFORE update() so onGround is correct during jump check
-            player.setOnPlatform(playerOnPlatform);
+        if (gameOver || door.isTriggered()) return;
 
-            // 2. Update player physics and tile collision
-            player.update();
+        // Update all barriers
+        for (Barrier b : barriers) {
+            b.update();
+        }
 
-            // 3. Snap player to platform surface if they just landed on one
-            for (MovingPlatform p : platforms) {
-                if (p.isPlayerLanding(player)) {
-                    player.snapToTop(p.getY());
-                }
+        // Update player
+        player.update();
+
+        // Check barrier collisions — any hit = game over
+        for (Barrier b : barriers) {
+            if (b.hitsPlayer(player)) {
+                gameOver = true;
+                return;
             }
         }
 
+        // Check if player reached the exit door
         door.checkPlayer(player);
     }
 
     /**
      * Renders the current frame:
-     * map → moving platforms → door → player → overlay (if level complete).
+     * map → barriers → door → player → overlay.
      *
-     * @param g the Graphics context provided by Swing
+     * @param g Swing graphics context
      */
     @Override
     protected void paintComponent(Graphics g) {
@@ -165,26 +171,49 @@ public class GamePanel extends JPanel implements Runnable {
 
         tileMap.draw(g2);
 
-        for (MovingPlatform p : platforms) {
-            p.draw(g2);
+        for (Barrier b : barriers) {
+            b.draw(g2);
         }
 
         door.draw(g2);
         player.draw(g2);
 
+        // Game Over overlay
+        if (gameOver) {
+            drawOverlay(g2, Color.RED, "GAME OVER", "Press R to restart");
+        }
+
+        // Level Complete overlay
         if (door.isTriggered()) {
-            // Semi-transparent dark overlay
-            g2.setColor(new Color(0, 0, 0, 150));
-            g2.fillRect(0, 0, getWidth(), getHeight());
-            // Centred "LEVEL COMPLETE!" message
-            g2.setColor(Color.YELLOW);
-            g2.setFont(new Font("Arial", Font.BOLD, 48));
-            String msg  = "LEVEL COMPLETE!";
-            int    msgX = (getWidth() - g2.getFontMetrics().stringWidth(msg)) / 2;
-            int    msgY = getHeight() / 2;
-            g2.drawString(msg, msgX, msgY);
+            drawOverlay(g2, Color.YELLOW, "LEVEL COMPLETE!", "Press R to play again");
         }
 
         g2.dispose();
+    }
+
+    /**
+     * Draws a semi-transparent overlay with a centred title and subtitle.
+     *
+     * @param g2       Graphics2D context
+     * @param color    title text colour
+     * @param title    main message
+     * @param subtitle smaller hint below the title
+     */
+    private void drawOverlay(Graphics2D g2, Color color, String title, String subtitle) {
+        // Dark background
+        g2.setColor(new Color(0, 0, 0, 170));
+        g2.fillRect(0, 0, getWidth(), getHeight());
+
+        // Title
+        g2.setColor(color);
+        g2.setFont(new Font("Arial", Font.BOLD, 52));
+        int titleX = (getWidth() - g2.getFontMetrics().stringWidth(title)) / 2;
+        g2.drawString(title, titleX, getHeight() / 2 - 20);
+
+        // Subtitle
+        g2.setColor(Color.WHITE);
+        g2.setFont(new Font("Arial", Font.PLAIN, 22));
+        int subX = (getWidth() - g2.getFontMetrics().stringWidth(subtitle)) / 2;
+        g2.drawString(subtitle, subX, getHeight() / 2 + 30);
     }
 }

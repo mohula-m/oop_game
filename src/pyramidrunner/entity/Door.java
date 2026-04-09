@@ -31,6 +31,11 @@ public class Door extends Entity {
         return triggered;
     }
 
+    /** Resets the door to its initial un-triggered state (used on game restart). */
+    public void reset() {
+        triggered = false;
+    }
+
     @Override
     public void update() {
         // Door is static — nothing to update
