@@ -1,3 +1,4 @@
+import pyramidrunner.core.PlayerCollisionException;
 import pyramidrunner.entity.Barrier;
 import pyramidrunner.entity.Door;
 import pyramidrunner.entity.Player;
@@ -145,12 +146,16 @@ public class GamePanel extends JPanel implements Runnable {
         // Update player
         player.update();
 
-        // Check barrier collisions — any hit = game over
-        for (Barrier b : barriers) {
-            if (b.hitsPlayer(player)) {
-                gameOver = true;
-                return;
+        // Check barrier collisions — throws PlayerCollisionException on hit
+        try {
+            for (Barrier b : barriers) {
+                if (b.hitsPlayer(player)) {
+                    throw new PlayerCollisionException(player.getX(), player.getY());
+                }
             }
+        } catch (PlayerCollisionException e) {
+            System.err.println("Game Over: " + e.getMessage());
+            gameOver = true;
         }
 
         // Check if player reached the exit door
