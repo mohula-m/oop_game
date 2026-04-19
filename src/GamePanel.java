@@ -1,3 +1,4 @@
+import pyramidrunner.core.EntityGroup;
 import pyramidrunner.core.GameEvent;
 import pyramidrunner.core.GameEventListener;
 import pyramidrunner.core.GameEventType;
@@ -15,8 +16,6 @@ import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -25,17 +24,22 @@ import java.util.logging.Logger;
  *
  * <p>Implements {@link Runnable} so the game loop runs on a dedicated thread.</p>
  *
+ * <p><b>Generics:</b> barriers are stored in an {@link EntityGroup}{@code <Barrier>}
+ * — a bounded generic container ({@code T extends Entity}) that provides type-safe
+ * bulk {@code updateAll()}, {@code drawAll()}, and {@code stream()} operations
+ * without raw-type casts.</p>
+ *
  * <p><b>Design pattern — Observer:</b> {@code GamePanel} implements
  * {@link GameEventListener} and registers itself with {@link Door} (the Subject).
  * When the player reaches the door, the door fires a
- * {@link pyramidrunner.core.GameEventType#LEVEL_COMPLETE} event and {@code GamePanel}
+ * {@link GameEventType#LEVEL_COMPLETE} event and {@code GamePanel}
  * reacts by logging the achievement — without {@code Door} knowing anything about
  * the panel.</p>
  *
  * <p>Composition: GamePanel creates and owns TileMap, Player, Door,
- * and the list of Barriers.</p>
+ * and the EntityGroup of Barriers.</p>
  *
- * <p>Uses lambda expressions for iterating game objects and
+ * <p>Uses lambda expressions for barrier stream checks and
  * {@link Logger} for INFO / FINE / SEVERE logging.</p>
  */
 public class GamePanel extends JPanel implements Runnable, GameEventListener {
@@ -54,11 +58,17 @@ public class GamePanel extends JPanel implements Runnable, GameEventListener {
     private Thread gameThread;
 
     // Composition: all game objects created and owned here
-    private final KeyHandler    keyHandler = new KeyHandler();
-    private final TileMap       tileMap;
-    private       Player        player;
-    private final Door          door;
-    private final List<Barrier> barriers;
+    private final KeyHandler          keyHandler = new KeyHandler();
+    private final TileMap             tileMap;
+    private       Player              player;
+    private final Door                door;
+
+    /**
+     * Generic container for barriers — {@code EntityGroup<Barrier>} uses a
+     * bounded type parameter {@code T extends Entity} so update/draw calls
+     * are available without casting.
+     */
+    private final EntityGroup<Barrier> barriers;
 
     /** True when a barrier has hit the player. Stops updates, shows overlay. */
     private boolean gameOver = false;
@@ -104,17 +114,18 @@ public class GamePanel extends JPanel implements Runnable, GameEventListener {
     // ── Game object setup ──────────────────────────────────────────────────
 
     /**
-     * Creates and positions all barriers in the level.
+     * Creates and returns an {@link EntityGroup}{@code <Barrier>} containing
+     * all level barriers.
      *
-     * @return list of configured Barrier objects
+     * @return populated generic barrier group
      */
-    private List<Barrier> createBarriers() {
+    private EntityGroup<Barrier> createBarriers() {
         int ts = TileMap.TILE_SIZE;
-        List<Barrier> list = new ArrayList<>();
-        list.add(new Barrier(5  * ts, 4  * ts - 36, 20, 36, 16 * ts, 2.5f));
-        list.add(new Barrier(3  * ts, 8  * ts - 36, 20, 36, 18 * ts, 2.0f));
-        list.add(new Barrier(6  * ts, 12 * ts - 36, 16, 36, 14 * ts, 3.5f));
-        return list;
+        EntityGroup<Barrier> group = new EntityGroup<>();
+        group.add(new Barrier(5  * ts, 4  * ts - 36, 20, 36, 16 * ts, 2.5f));
+        group.add(new Barrier(3  * ts, 8  * ts - 36, 20, 36, 18 * ts, 2.0f));
+        group.add(new Barrier(6  * ts, 12 * ts - 36, 16, 36, 14 * ts, 3.5f));
+        return group;
     }
 
     /**
@@ -164,7 +175,7 @@ public class GamePanel extends JPanel implements Runnable, GameEventListener {
 
     /**
      * Advances the game by one frame.
-     * Uses lambda expressions to update and check barriers.
+     * Uses {@link EntityGroup#updateAll()} and a stream lambda for barrier checks.
      */
     private void update() {
         if ((gameOver || door.isTriggered()) && keyHandler.restart) {
@@ -173,15 +184,15 @@ public class GamePanel extends JPanel implements Runnable, GameEventListener {
         }
         if (gameOver || door.isTriggered()) return;
 
-        // Lambda: update every barrier in one line
-        barriers.forEach(Barrier::update);
+        // EntityGroup<Barrier> — generic bulk update (no cast needed)
+        barriers.updateAll();
 
         // Log player position at FINE (debug) level each frame
         LOGGER.fine("Player pos: x=" + player.getX() + " y=" + player.getY());
 
         player.update();
 
-        // Lambda: check if any barrier hits the player
+        // Lambda + generic stream: check if any barrier hits the player
         boolean hit = barriers.stream().anyMatch(b -> b.hitsPlayer(player));
         if (hit) {
             try {
@@ -213,8 +224,8 @@ public class GamePanel extends JPanel implements Runnable, GameEventListener {
 
         tileMap.draw(g2);
 
-        // Lambda: draw every barrier
-        barriers.forEach(b -> b.draw(g2));
+        // EntityGroup<Barrier> — generic bulk draw
+        barriers.drawAll(g2);
 
         door.draw(g2);
         player.draw(g2);

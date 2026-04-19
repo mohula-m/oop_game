@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import static org.junit.jupiter.api.Assertions.*;
 
+import pyramidrunner.core.EntityGroup;
 import pyramidrunner.core.GameEvent;
 import pyramidrunner.core.GameEventListener;
 import pyramidrunner.core.GameEventType;
@@ -305,6 +306,83 @@ public class GameTest {
         GameEvent event = new GameEvent(GameEventType.GAME_OVER, "barrier hit");
         assertEquals(GameEventType.GAME_OVER, event.getType());
         assertEquals("barrier hit", event.getMessage());
+    }
+
+    // ── EntityGroup<T> — Generics ────────────────────────────────────────────
+
+    @Test
+    void testEntityGroupIsEmptyInitially() {
+        EntityGroup<Barrier> group = new EntityGroup<>();
+        assertTrue(group.isEmpty(), "New group should be empty");
+        assertEquals(0, group.size(), "New group size should be 0");
+    }
+
+    @Test
+    void testEntityGroupAddIncreasesSize() {
+        EntityGroup<Barrier> group = new EntityGroup<>();
+        group.add(new Barrier(0, 0, 10, 10, 100, 1f));
+        group.add(new Barrier(0, 0, 10, 10, 100, 1f));
+        assertEquals(2, group.size(), "Size should be 2 after two adds");
+        assertFalse(group.isEmpty(), "Group should not be empty");
+    }
+
+    @Test
+    void testEntityGroupRemove() {
+        EntityGroup<Barrier> group = new EntityGroup<>();
+        Barrier b = new Barrier(0, 0, 10, 10, 100, 1f);
+        group.add(b);
+        boolean removed = group.remove(b);
+        assertTrue(removed, "remove() should return true for existing element");
+        assertEquals(0, group.size(), "Size should be 0 after removal");
+    }
+
+    @Test
+    void testEntityGroupUpdateAllMovesBarriers() {
+        EntityGroup<Barrier> group = new EntityGroup<>();
+        Barrier b = new Barrier(50, 0, 10, 10, 200, 5f);
+        group.add(b);
+        int before = b.getX();
+        group.updateAll();
+        assertTrue(b.getX() > before, "updateAll() should advance barrier position");
+    }
+
+    @Test
+    void testEntityGroupStreamAnyMatch() {
+        EntityGroup<Barrier> group = new EntityGroup<>();
+        group.add(new Barrier(player.getX(), player.getY(), 20, 20, 500, 0f));
+        group.add(new Barrier(900, 900, 10, 10, 950, 1f));
+        boolean hit = group.stream().anyMatch(b -> b.hitsPlayer(player));
+        assertTrue(hit, "stream().anyMatch() should find the overlapping barrier");
+    }
+
+    @Test
+    void testEntityGroupForEachCountsElements() {
+        EntityGroup<Barrier> group = new EntityGroup<>();
+        group.add(new Barrier(0, 0, 5, 5, 50, 1f));
+        group.add(new Barrier(0, 0, 5, 5, 50, 1f));
+        group.add(new Barrier(0, 0, 5, 5, 50, 1f));
+        int[] count = {0};
+        group.forEach(b -> count[0]++);
+        assertEquals(3, count[0], "forEach should visit all 3 barriers");
+    }
+
+    @Test
+    void testEntityGroupGetAllIsUnmodifiable() {
+        EntityGroup<Barrier> group = new EntityGroup<>();
+        group.add(new Barrier(0, 0, 5, 5, 50, 1f));
+        assertThrows(UnsupportedOperationException.class,
+                () -> group.getAll().add(new Barrier(0, 0, 5, 5, 50, 1f)),
+                "getAll() must return an unmodifiable list");
+    }
+
+    @Test
+    void testEntityGroupRemoveIf() {
+        EntityGroup<Barrier> group = new EntityGroup<>();
+        group.add(new Barrier(10,  0, 5, 5, 50, 1f));
+        group.add(new Barrier(200, 0, 5, 5, 300, 1f));
+        group.removeIf(b -> b.getX() > 100);
+        assertEquals(1, group.size(), "removeIf should remove only matching elements");
+        assertEquals(10, group.getAll().get(0).getX(), "Remaining barrier should be at x=10");
     }
 
     @Test
