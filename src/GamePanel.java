@@ -2,7 +2,9 @@ import pyramidrunner.core.EntityGroup;
 import pyramidrunner.core.GameEvent;
 import pyramidrunner.core.GameEventListener;
 import pyramidrunner.core.GameEventType;
+import pyramidrunner.core.HighScore;
 import pyramidrunner.core.PlayerCollisionException;
+import pyramidrunner.core.ScoreManager;
 import pyramidrunner.entity.Barrier;
 import pyramidrunner.entity.Door;
 import pyramidrunner.entity.Player;
@@ -26,21 +28,23 @@ import java.util.logging.Logger;
  *
  * <p><b>Generics:</b> barriers are stored in an {@link EntityGroup}{@code <Barrier>}
  * — a bounded generic container ({@code T extends Entity}) that provides type-safe
- * bulk {@code updateAll()}, {@code drawAll()}, and {@code stream()} operations
- * without raw-type casts.</p>
+ * bulk {@code updateAll()}, {@code drawAll()}, and {@code stream()} operations.</p>
  *
  * <p><b>Design pattern — Observer:</b> {@code GamePanel} implements
- * {@link GameEventListener} and registers itself with {@link Door} (the Subject).
- * When the player reaches the door, the door fires a
- * {@link GameEventType#LEVEL_COMPLETE} event and {@code GamePanel}
- * reacts by logging the achievement — without {@code Door} knowing anything about
- * the panel.</p>
+ * {@link GameEventListener} and registers itself with {@link Door} (Subject).
+ * On level completion the door fires {@link GameEventType#LEVEL_COMPLETE} and
+ * {@code GamePanel} records the run time via the {@link ScoreManager} Singleton.</p>
+ *
+ * <p><b>Design pattern — Singleton:</b> {@link ScoreManager#getInstance()} provides
+ * the single application-wide score repository; the panel never constructs it
+ * directly.</p>
+ *
+ * <p><b>Serialization:</b> completed runs are saved to disk as
+ * {@link HighScore} objects (implements {@link java.io.Serializable})
+ * through {@link ScoreManager}.</p>
  *
  * <p>Composition: GamePanel creates and owns TileMap, Player, Door,
  * and the EntityGroup of Barriers.</p>
- *
- * <p>Uses lambda expressions for barrier stream checks and
- * {@link Logger} for INFO / FINE / SEVERE logging.</p>
  */
 public class GamePanel extends JPanel implements Runnable, GameEventListener {
 
@@ -58,17 +62,20 @@ public class GamePanel extends JPanel implements Runnable, GameEventListener {
     private Thread gameThread;
 
     // Composition: all game objects created and owned here
-    private final KeyHandler          keyHandler = new KeyHandler();
-    private final TileMap             tileMap;
-    private       Player              player;
-    private final Door                door;
-
-    /**
-     * Generic container for barriers — {@code EntityGroup<Barrier>} uses a
-     * bounded type parameter {@code T extends Entity} so update/draw calls
-     * are available without casting.
-     */
+    private final KeyHandler           keyHandler = new KeyHandler();
+    private final TileMap              tileMap;
+    private       Player               player;
+    private final Door                 door;
     private final EntityGroup<Barrier> barriers;
+
+    /** Singleton score repository — obtained once, reused throughout. */
+    private final ScoreManager scoreManager = ScoreManager.getInstance();
+
+    /** System time (ms) when the current round started — used to compute score. */
+    private long roundStartTime;
+
+    /** Elapsed ms of the last completed run — shown in the overlay. */
+    private long lastRunTimeMs = 0;
 
     /** True when a barrier has hit the player. Stops updates, shows overlay. */
     private boolean gameOver = false;
@@ -86,6 +93,8 @@ public class GamePanel extends JPanel implements Runnable, GameEventListener {
         // Observer registration: GamePanel listens for door events
         door.addListener(this);
 
+        roundStartTime = System.currentTimeMillis();
+
         setPreferredSize(new Dimension(tileMap.getPixelWidth(), tileMap.getPixelHeight()));
         setBackground(Color.DARK_GRAY);
         setFocusable(true);
@@ -97,15 +106,22 @@ public class GamePanel extends JPanel implements Runnable, GameEventListener {
     // ── Observer callback ──────────────────────────────────────────────────
 
     /**
-     * Called by the door (Subject) when a game event is fired.
-     * Reacts to {@link GameEventType#LEVEL_COMPLETE} with an INFO log entry.
+     * Called by the door (Subject) when a game event fires.
+     *
+     * <p>On {@link GameEventType#LEVEL_COMPLETE}: calculates elapsed time,
+     * creates a {@link HighScore} (Serializable), and persists it via the
+     * {@link ScoreManager} Singleton.</p>
      *
      * @param event the event received from the Subject
      */
     @Override
     public void onGameEvent(GameEvent event) {
         if (event.getType() == GameEventType.LEVEL_COMPLETE) {
-            LOGGER.info("Observer notified — Level complete! " + event.getMessage());
+            lastRunTimeMs = System.currentTimeMillis() - roundStartTime;
+            HighScore hs = new HighScore("Player", lastRunTimeMs);
+            scoreManager.addScore(hs);
+            LOGGER.info("Observer notified — Level complete! Time: "
+                        + hs + " | " + event.getMessage());
         } else if (event.getType() == GameEventType.GAME_OVER) {
             LOGGER.info("Observer notified — Game over! " + event.getMessage());
         }
@@ -129,12 +145,13 @@ public class GamePanel extends JPanel implements Runnable, GameEventListener {
     }
 
     /**
-     * Resets the game to its initial state.
+     * Resets the game to its initial state and restarts the timer.
      */
     private void resetGame() {
-        player   = new Player(PLAYER_START_X, PLAYER_START_Y, keyHandler, tileMap);
+        player         = new Player(PLAYER_START_X, PLAYER_START_Y, keyHandler, tileMap);
         door.reset();
-        gameOver = false;
+        gameOver       = false;
+        roundStartTime = System.currentTimeMillis();
         LOGGER.info("Game reset — new round started.");
     }
 
@@ -175,7 +192,6 @@ public class GamePanel extends JPanel implements Runnable, GameEventListener {
 
     /**
      * Advances the game by one frame.
-     * Uses {@link EntityGroup#updateAll()} and a stream lambda for barrier checks.
      */
     private void update() {
         if ((gameOver || door.isTriggered()) && keyHandler.restart) {
@@ -184,28 +200,23 @@ public class GamePanel extends JPanel implements Runnable, GameEventListener {
         }
         if (gameOver || door.isTriggered()) return;
 
-        // EntityGroup<Barrier> — generic bulk update (no cast needed)
         barriers.updateAll();
 
-        // Log player position at FINE (debug) level each frame
         LOGGER.fine("Player pos: x=" + player.getX() + " y=" + player.getY());
 
         player.update();
 
-        // Lambda + generic stream: check if any barrier hits the player
         boolean hit = barriers.stream().anyMatch(b -> b.hitsPlayer(player));
         if (hit) {
             try {
                 throw new PlayerCollisionException(player.getX(), player.getY());
             } catch (PlayerCollisionException e) {
-                // SEVERE = error level logging
                 LOGGER.log(Level.SEVERE, "Barrier collision: " + e.getMessage());
                 gameOver = true;
             }
         }
 
         if (door.isTriggered()) return;
-        // Door fires LEVEL_COMPLETE event → onGameEvent() is called automatically
         door.checkPlayer(player);
     }
 
@@ -223,15 +234,17 @@ public class GamePanel extends JPanel implements Runnable, GameEventListener {
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
         tileMap.draw(g2);
-
-        // EntityGroup<Barrier> — generic bulk draw
         barriers.drawAll(g2);
-
         door.draw(g2);
         player.draw(g2);
 
-        if (gameOver)            drawOverlay(g2, Color.RED,    "GAME OVER",       "Press R to restart");
-        if (door.isTriggered())  drawOverlay(g2, Color.YELLOW, "LEVEL COMPLETE!", "Press R to play again");
+        if (gameOver) {
+            drawOverlay(g2, Color.RED, "GAME OVER", "Press R to restart");
+        }
+        if (door.isTriggered()) {
+            String timeStr = String.format("%.1f s", lastRunTimeMs / 1000.0);
+            drawOverlay(g2, Color.YELLOW, "LEVEL COMPLETE!", "Time: " + timeStr + "   Press R to play again");
+        }
 
         g2.dispose();
     }
