@@ -138,9 +138,10 @@ public class GamePanel extends JPanel implements Runnable, GameEventListener {
     private EntityGroup<Barrier> createBarriers() {
         int ts = TileMap.TILE_SIZE;
         EntityGroup<Barrier> group = new EntityGroup<>();
-        group.add(new Barrier(5  * ts, 4  * ts - 36, 20, 36, 16 * ts, 2.5f));
+        group.add(new Barrier(5  * ts, 4  * ts - 36, 20, 36, 20 * ts, 2.5f));
         group.add(new Barrier(3  * ts, 8  * ts - 36, 20, 36, 18 * ts, 2.0f));
-        group.add(new Barrier(6  * ts, 12 * ts - 36, 16, 36, 14 * ts, 3.5f));
+        group.add(new Barrier(2  * ts, 12 * ts - 36, 16, 36, 14 * ts, 3.5f));
+        group.add(new Barrier(3  * ts, 10 * ts - 36, 20, 36, 19 * ts, 4.0f));
         return group;
     }
 
