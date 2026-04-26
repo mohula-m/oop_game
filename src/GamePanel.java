@@ -25,16 +25,16 @@ import java.util.Locale;
 import java.util.logging.Logger;
 
 /**
- * Main game panel — game loop, update logic, and rendering.
+ * Main game panel - handles the game loop, update logic, and rendering.
  *
- * <p>Supports three levels ({@link Level1}, {@link Level2}, {@link Level3}).
- * Completing a level advances to the next; finishing all three or pressing
- * ESC returns to {@link MenuPanel} via the {@code returnToMenu} callback.</p>
+ * Supports three levels. Completing a level advances to the next one;
+ * finishing all three or pressing ESC returns to the menu.
  *
- * <p><b>Generics:</b> barriers stored in {@link EntityGroup}{@code <Barrier>}.</p>
- * <p><b>Observer:</b> implements {@link GameEventListener}; {@link Door} is Subject.</p>
- * <p><b>Singleton:</b> scores persisted via {@link ScoreManager#getInstance()}.</p>
- * <p><b>Serialization:</b> run times saved as {@link HighScore} objects.</p>
+ * OOP patterns used here:
+ * - Generics: barriers are stored in EntityGroup<Barrier>
+ * - Observer: GamePanel implements GameEventListener, Door is the Subject
+ * - Singleton: scores saved via ScoreManager.getInstance()
+ * - Serialization: run times stored as HighScore objects in scores.dat
  */
 public class GamePanel extends JPanel implements Runnable, GameEventListener {
 
@@ -45,35 +45,31 @@ public class GamePanel extends JPanel implements Runnable, GameEventListener {
     private static final int PLAYER_START_X = TileMap.TILE_SIZE + 2;
     private static final int PLAYER_START_Y = 14 * TileMap.TILE_SIZE - 44;
 
-    /**
-     * All available levels — polymorphism: GamePanel works against the
-     * abstract {@code pyramidrunner.world.Level} type, never against
-     * concrete subclasses directly.
-     */
+    // all levels - GamePanel only knows about the abstract Level type (polymorphism)
     private static final pyramidrunner.world.Level[] ALL_LEVELS =
             { new Level1(), new Level2(), new Level3() };
 
     private Thread gameThread;
 
-    // ── Input (shared across level loads) ─────────────────────────────────
+    // keyboard input - shared across level loads
     private final KeyHandler keyHandler = new KeyHandler();
 
-    // ── Game world (rebuilt on every loadLevel call) ───────────────────────
+    // game world objects - rebuilt every time loadLevel() is called
     private TileMap              tileMap;
     private Player               player;
     private Door                 door;
     private EntityGroup<Barrier> barriers;
 
-    // ── Level state ────────────────────────────────────────────────────────
+    // level state
     private int     currentLevelIndex = 0;
     private boolean gameOver          = false;
 
-    // ── Scoring ────────────────────────────────────────────────────────────
+    // scoring
     private final ScoreManager scoreManager = ScoreManager.getInstance();
     private long roundStartTime = 0;
     private long lastRunTimeMs  = 0;
 
-    /** Invoked when the player presses ESC or completes all three levels. */
+    // called when the player presses ESC or finishes all levels
     private final Runnable returnToMenu;
 
     /**
@@ -92,11 +88,11 @@ public class GamePanel extends JPanel implements Runnable, GameEventListener {
         loadLevel(currentLevelIndex);
     }
 
-    // ── Observer ───────────────────────────────────────────────────────────
+    // Observer - called by Door when LEVEL_COMPLETE fires
 
     /**
-     * Receives {@link GameEventType#LEVEL_COMPLETE} from the Door (Subject).
-     * Records elapsed time as a {@link HighScore} via the Singleton {@link ScoreManager}.
+     * Called when the door fires a LEVEL_COMPLETE event.
+     * Records the elapsed time and saves it via ScoreManager (Singleton).
      */
     @Override
     public void onGameEvent(GameEvent event) {
@@ -108,13 +104,11 @@ public class GamePanel extends JPanel implements Runnable, GameEventListener {
         }
     }
 
-    // ── Level loading ──────────────────────────────────────────────────────
-
     /**
-     * Rebuilds the entire game world for the level at {@code index}.
-     * Every object (tileMap, player, door, barriers) is replaced.
+     * Rebuilds the entire game world for the given level index.
+     * Replaces tileMap, player, door, and barriers with fresh objects.
      *
-     * @param index 0-based index into {@link #ALL_LEVELS}
+     * @param index 0-based index into ALL_LEVELS
      */
     private void loadLevel(int index) {
         currentLevelIndex = index;
@@ -126,7 +120,7 @@ public class GamePanel extends JPanel implements Runnable, GameEventListener {
         barriers = new EntityGroup<>();
         level.setupBarriers(barriers, TileMap.TILE_SIZE);
 
-        door.addListener(this);      // Observer: subscribe to door events
+        door.addListener(this);      // register as Observer so we get notified when door is reached
         gameOver       = false;
         roundStartTime = System.currentTimeMillis();
 
@@ -134,8 +128,6 @@ public class GamePanel extends JPanel implements Runnable, GameEventListener {
                     + " – " + level.getLevelName()
                     + "  (" + barriers.size() + " barriers)");
     }
-
-    // ── Thread ─────────────────────────────────────────────────────────────
 
     /** Starts the 90-FPS game loop on a dedicated thread. */
     public void startGameThread() {
@@ -156,8 +148,6 @@ public class GamePanel extends JPanel implements Runnable, GameEventListener {
             if (delta >= 1) { update(); repaint(); delta--; }
         }
     }
-
-    // ── Update ─────────────────────────────────────────────────────────────
 
     private void update() {
 
@@ -188,12 +178,12 @@ public class GamePanel extends JPanel implements Runnable, GameEventListener {
 
         if (gameOver || door.isTriggered()) return;
 
-        // Normal frame ─────────────────────────────────────────────────────
+        // normal frame update
         barriers.updateAll();
         LOGGER.fine("Player: x=" + player.getX() + " y=" + player.getY());
         player.update();
 
-        // Lambda: check if any barrier hit the player
+        // check if any barrier hit the player
         boolean hit = barriers.stream().anyMatch(b -> b.hitsPlayer(player));
         if (hit) {
             try {
@@ -209,8 +199,6 @@ public class GamePanel extends JPanel implements Runnable, GameEventListener {
             door.checkPlayer(player);
         }
     }
-
-    // ── Rendering ──────────────────────────────────────────────────────────
 
     @Override
     protected void paintComponent(Graphics g) {

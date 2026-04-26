@@ -4,11 +4,9 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 
 /**
- * A moving red barrier that triggers Game Over on player contact.
- * Extends Entity — demonstrates Inheritance and run-time Polymorphism.
- *
- * <p>Barriers patrol horizontally between two X positions.
- * If the player touches one, the game stops immediately.</p>
+ * A moving red barrier - touching one ends the game.
+ * Moves back and forth between startX and endX at the given speed.
+ * Extends Entity (inheritance), overrides update() and draw() (polymorphism).
  */
 public class Barrier extends Entity {
 

@@ -16,11 +16,9 @@ import java.awt.event.KeyListener;
 import java.util.function.Consumer;
 
 /**
- * Start-screen panel — lets the player choose which level to play.
- *
- * <p>Press <b>1</b>, <b>2</b>, or <b>3</b> to launch the corresponding level.
- * When a key is pressed, {@link #onLevelSelected} is called with the chosen
- * level number and the main window replaces this panel with a {@link GamePanel}.</p>
+ * Start screen - shows the three levels and lets the player choose one.
+ * Press 1, 2, or 3 to start the corresponding level.
+ * Uses a Consumer callback so Main can swap this panel for a GamePanel.
  */
 public class MenuPanel extends JPanel implements KeyListener {
 
@@ -33,10 +31,10 @@ public class MenuPanel extends JPanel implements KeyListener {
     private static final Color DESC_COL   = new Color(200, 200, 200);
     private static final Color HINT_COL   = new Color(120, 120, 120);
 
-    /** Called with the chosen level number (1, 2, or 3) when the player presses a key. */
+    // called with 1, 2, or 3 when the player picks a level
     private final Consumer<Integer> onLevelSelected;
 
-    /** Level metadata used to render the descriptions. */
+    // used to display level names and descriptions on screen
     private final Level[] levels = { new Level1(), new Level2(), new Level3() };
 
     /**

@@ -13,48 +13,34 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The exit door that ends the level when the player steps into it.
+ * Exit door - the goal of each level.
+ * When the player touches it, the level ends (LEVEL_COMPLETE event is fired).
  *
- * <p><b>Design pattern — Observer / Subject:</b> {@code Door} implements
- * {@link GameEventSource}.  Any number of {@link GameEventListener}s can
- * register with {@link #addListener}.  The moment the player touches the
- * door, {@code Door} fires a {@link GameEventType#LEVEL_COMPLETE} event to
- * every registered listener — without knowing anything about them.</p>
- *
- * <p>Inheritance: {@code Door} extends {@link Entity}.</p>
+ * Extends Entity (inheritance).
+ * Implements GameEventSource - Observer pattern, Door is the Subject.
+ * Listeners register with addListener() and get notified when triggered.
  */
-// Inheritance: Door extends Entity
 public class Door extends Entity implements GameEventSource {
 
     private static final Color COLOR_DOOR   = new Color(255, 195, 0);
     private static final Color COLOR_BORDER = new Color(180, 130, 0);
 
-    /** Whether the player has already reached this door. */
     private boolean triggered = false;
 
-    /**
-     * Registered observers — notified once when the door is triggered.
-     * Composition: Door owns its listener list.
-     */
+    // list of observers - notified when player reaches the door
     private final List<GameEventListener> listeners = new ArrayList<>();
 
     /**
-     * Places the door at the given tile coordinates.
+     * Creates a door at tile position (col, row).
      *
-     * @param tileCol column index (0-based)
-     * @param tileRow row    index (0-based)
+     * @param tileCol column in tile coordinates
+     * @param tileRow row in tile coordinates
      */
     public Door(int tileCol, int tileRow) {
         super(tileCol * TileMap.TILE_SIZE, tileRow * TileMap.TILE_SIZE,
               TileMap.TILE_SIZE, TileMap.TILE_SIZE);
     }
 
-    // ── GameEventSource ────────────────────────────────────────────────────
-
-    /**
-     * {@inheritDoc}
-     * Registers {@code listener} to be notified when the door is triggered.
-     */
     @Override
     public void addListener(GameEventListener listener) {
         if (!listeners.contains(listener)) {
@@ -62,61 +48,43 @@ public class Door extends Entity implements GameEventSource {
         }
     }
 
-    /**
-     * {@inheritDoc}
-     * Removes {@code listener} from the notification list.
-     */
     @Override
     public void removeListener(GameEventListener listener) {
         listeners.remove(listener);
     }
 
-    /**
-     * Notifies all registered observers about {@code event}.
-     *
-     * @param event the event to broadcast
-     */
+    // sends the event to all registered listeners
     private void notifyListeners(GameEvent event) {
-        // Lambda: iterate and notify every observer in one expression
         listeners.forEach(l -> l.onGameEvent(event));
     }
 
-    // ── Domain logic ───────────────────────────────────────────────────────
-
     /**
-     * Checks whether the player overlaps this door.
-     * If so, marks it as triggered and fires a
-     * {@link GameEventType#LEVEL_COMPLETE} event.
+     * Call every frame - checks if player is touching the door.
+     * Fires LEVEL_COMPLETE event once on first contact.
      *
-     * @param player the player entity to test
+     * @param player the player to check against
      */
     public void checkPlayer(Player player) {
         if (!triggered && intersects(player)) {
             triggered = true;
             notifyListeners(new GameEvent(
                     GameEventType.LEVEL_COMPLETE,
-                    "Player reached the exit door at (" + x + ", " + y + ")"));
+                    "Player reached the exit at (" + x + ", " + y + ")"));
         }
     }
 
-    /** @return {@code true} if the player has already reached this door */
-    public boolean isTriggered() {
-        return triggered;
-    }
+    /** @return true if the player already reached this door */
+    public boolean isTriggered() { return triggered; }
 
-    /** Resets the door to its initial un-triggered state (used on game restart). */
-    public void reset() {
-        triggered = false;
-    }
+    /** Resets door state - called when restarting the game. */
+    public void reset() { triggered = false; }
 
-    /** @return number of currently registered observers (useful for testing) */
-    public int listenerCount() {
-        return listeners.size();
-    }
+    /** @return how many listeners are currently registered */
+    public int listenerCount() { return listeners.size(); }
 
     @Override
     public void update() {
-        // Door is static — nothing to update each frame
+        // door doesn't move, nothing to update
     }
 
     @Override
@@ -126,14 +94,11 @@ public class Door extends Entity implements GameEventSource {
 
     @Override
     public void draw(Graphics2D g, Color color) {
-        // Fill
         g.setColor(color);
         g.fillRect(x, y, width, height);
-        // Border
         g.setColor(COLOR_BORDER);
         g.drawRect(x, y, width - 1, height - 1);
         g.drawRect(x + 2, y + 2, width - 5, height - 5);
-        // Label
         g.setColor(Color.BLACK);
         g.setFont(new Font("Arial", Font.BOLD, 16));
         g.drawString("EXIT", x + 4, y + height / 2 + 6);

@@ -2,12 +2,8 @@ import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
 
 /**
- * Application entry point.
- *
- * <p>Creates the main window, shows {@link MenuPanel} initially, and
- * switches to {@link GamePanel} when the player selects a level.
- * When the game ends (ESC or all levels complete), it swaps back to
- * the menu — all within the same {@link JFrame}.</p>
+ * Entry point - creates the window and manages the switch between menu and game.
+ * showMenu() and startGame() swap the content pane within the same JFrame.
  */
 public class Main {
 
@@ -37,8 +33,7 @@ public class Main {
     }
 
     /**
-     * Replaces the window content with a {@link GamePanel} starting at
-     * the chosen level, then kicks off the game loop.
+     * Replaces the window content with a GamePanel for the chosen level.
      *
      * @param level 1-based level number (1 = Tutorial, 2 = Rising, 3 = Expert)
      */

@@ -7,11 +7,10 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 
 /**
- * The player character — demonstrates Inheritance (extends Entity),
- * Overriding (update, draw), and Overloading (move).
- *
- * <p>Uses Aggregation for {@link KeyHandler} and {@link TileMap}:
- * both are passed in from outside and exist independently of the Player.</p>
+ * The player character controlled by keyboard input.
+ * Extends Entity (inheritance), overrides update() and draw() (polymorphism).
+ * Has two move() overloads - compile-time polymorphism.
+ * Aggregates KeyHandler and TileMap - both exist independently of the player.
  */
 public class Player extends Entity {
 
