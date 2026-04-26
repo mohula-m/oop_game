@@ -55,7 +55,7 @@ public final class ScoreManager {
      * Resets the singleton — intended for unit tests only.
      * Calling this in production code produces undefined behaviour.
      */
-    static void resetForTesting() {
+    public static void resetForTesting() {
         instance = null;
     }
 
