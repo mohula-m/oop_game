@@ -21,6 +21,7 @@ import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+import java.util.Locale;
 import java.util.logging.Logger;
 
 /**
@@ -230,7 +231,7 @@ public class GamePanel extends JPanel implements Runnable, GameEventListener {
                     "R — try again     ESC — menu");
         } else if (door.isTriggered()) {
             boolean last    = (currentLevelIndex == ALL_LEVELS.length - 1);
-            String  timeStr = String.format("%.1f s", lastRunTimeMs / 1000.0);
+            String  timeStr = String.format(Locale.US, "%.1f s", lastRunTimeMs / 1000.0);
             String  subMsg  = last
                     ? "YOU WIN ALL LEVELS!   R — back to menu"
                     : "Time: " + timeStr + "   R — Level " + (currentLevelIndex + 2) + "   ESC — menu";

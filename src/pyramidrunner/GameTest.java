@@ -21,10 +21,17 @@ import pyramidrunner.world.FloorTile;
 import pyramidrunner.world.TileMap;
 import pyramidrunner.world.WallTile;
 
+import java.awt.event.KeyEvent;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.ObjectOutputStream;
+import javax.swing.JPanel;
 
 public class GameTest {
+
+    // scores.dat is written by ScoreManager during real game runs.
+    // Tests must delete it before and after so stored scores don't affect results.
+    private static final File SCORES_FILE = new File("scores.dat");
 
     private TileMap    tileMap;
     private KeyHandler keyHandler;
@@ -35,14 +42,16 @@ public class GameTest {
         tileMap    = new TileMap();
         keyHandler = new KeyHandler();
         player     = new Player(TileMap.TILE_SIZE + 2, TileMap.TILE_SIZE + 2, keyHandler, tileMap);
-        // Reset Singleton before each test that uses ScoreManager
+        // Reset Singleton and delete the file so tests start with an empty state
         ScoreManager.resetForTesting();
+        SCORES_FILE.delete();
     }
 
     @AfterEach
     void tearDown() {
-        // Ensure singleton is clean after each test
+        // Clean up after test so the next test isn't affected
         ScoreManager.resetForTesting();
+        SCORES_FILE.delete();
     }
 
     // ── TileMap ─────────────────────────────────────────────────────────────
@@ -167,13 +176,30 @@ public class GameTest {
 
     @Test
     void testPlayerMoveWithCollision() {
-        // Move player to a safe position, then try to move into a wall
-        // Player starts at (TILE_SIZE+2, TILE_SIZE+2); left wall is at x=0
         int beforeX = player.getX();
-        player.move(-10, 0); // small delta — should be allowed if no wall
-        // Result depends on map; key check is no exception thrown
+        player.move(-10, 0);
         assertDoesNotThrow(() -> player.move(0, 0));
         assertTrue(player.getX() >= 0, "X should never be negative");
+    }
+
+    @Test
+    void testPlayerGravityAccumulatesOverTime() {
+        // Player starts floating — velocityY should grow each frame (gravity)
+        float v0 = player.getVelocityY();
+        player.update();
+        float v1 = player.getVelocityY();
+        player.update();
+        float v2 = player.getVelocityY();
+        assertTrue(v2 > v1 && v1 > v0, "VelocityY should increase each frame (gravity)");
+    }
+
+    @Test
+    void testPlayerMoveZeroDeltaDoesNothing() {
+        int x = player.getX();
+        int y = player.getY();
+        player.move(0, 0);
+        assertEquals(x, player.getX(), "move(0,0) should not change X");
+        assertEquals(y, player.getY(), "move(0,0) should not change Y");
     }
 
     // ── Door ────────────────────────────────────────────────────────────────
@@ -231,18 +257,20 @@ public class GameTest {
 
     @Test
     void testBarrierMovesAndReversesDirection() {
-        int startX = 100;
-        int endX   = 150;
-        Barrier barrier = new Barrier(startX, 100, 20, 36, endX, 10f);
+        // speed=10, range 100..150
+        // each update: 100→110→120→130→140→150(reverse)→140→...
+        Barrier barrier = new Barrier(100, 100, 20, 36, 150, 10f);
 
+        barrier.update(); // 100 → 110
+        assertEquals(110, barrier.getX(), "First update should move right to 110");
+
+        // four more steps reach endX: 110→120→130→140→150
+        for (int i = 0; i < 4; i++) barrier.update();
+        assertEquals(150, barrier.getX(), "Should reach endX=150");
+
+        // next step reverses direction: 150 → 140
         barrier.update();
-        int afterFirst = barrier.getX();
-        assertTrue(afterFirst > startX, "Barrier should move right initially");
-
-        for (int i = 0; i < 20; i++) barrier.update();
-        int afterBounce = barrier.getX();
-        assertTrue(afterBounce < afterFirst || afterBounce == startX,
-                   "Barrier should reverse after reaching endX");
+        assertTrue(barrier.getX() < 150, "Should move left after reaching endX");
     }
 
     @Test
@@ -301,6 +329,11 @@ public class GameTest {
 
     // ── KeyHandler ──────────────────────────────────────────────────────────
 
+    /** Helper: creates a KeyEvent without needing a real window. */
+    private KeyEvent makeKey(int type, int code) {
+        return new KeyEvent(new JPanel(), type, 0, 0, code, (char) code);
+    }
+
     @Test
     void testKeyHandlerInitialState() {
         KeyHandler kh = new KeyHandler();
@@ -308,6 +341,54 @@ public class GameTest {
         assertFalse(kh.right,   "right should be false initially");
         assertFalse(kh.jump,    "jump should be false initially");
         assertFalse(kh.restart, "restart should be false initially");
+    }
+
+    @Test
+    void testKeyHandlerPressW() {
+        KeyHandler kh = new KeyHandler();
+        kh.keyPressed(makeKey(KeyEvent.KEY_PRESSED, KeyEvent.VK_W));
+        assertTrue(kh.jump, "W press should set jump=true");
+    }
+
+    @Test
+    void testKeyHandlerReleaseW() {
+        KeyHandler kh = new KeyHandler();
+        kh.keyPressed(makeKey(KeyEvent.KEY_PRESSED, KeyEvent.VK_W));
+        kh.keyReleased(makeKey(KeyEvent.KEY_RELEASED, KeyEvent.VK_W));
+        assertFalse(kh.jump, "W release should set jump=false");
+    }
+
+    @Test
+    void testKeyHandlerPressArrows() {
+        KeyHandler kh = new KeyHandler();
+        kh.keyPressed(makeKey(KeyEvent.KEY_PRESSED, KeyEvent.VK_LEFT));
+        kh.keyPressed(makeKey(KeyEvent.KEY_PRESSED, KeyEvent.VK_RIGHT));
+        assertTrue(kh.left,  "LEFT arrow should set left=true");
+        assertTrue(kh.right, "RIGHT arrow should set right=true");
+    }
+
+    @Test
+    void testKeyHandlerPressR() {
+        KeyHandler kh = new KeyHandler();
+        kh.keyPressed(makeKey(KeyEvent.KEY_PRESSED, KeyEvent.VK_R));
+        assertTrue(kh.restart, "R should set restart=true");
+        kh.keyReleased(makeKey(KeyEvent.KEY_RELEASED, KeyEvent.VK_R));
+        assertFalse(kh.restart, "R release should set restart=false");
+    }
+
+    @Test
+    void testKeyHandlerPressEscape() {
+        KeyHandler kh = new KeyHandler();
+        kh.keyPressed(makeKey(KeyEvent.KEY_PRESSED, KeyEvent.VK_ESCAPE));
+        assertTrue(kh.escape, "ESC should set escape=true");
+        kh.keyReleased(makeKey(KeyEvent.KEY_RELEASED, KeyEvent.VK_ESCAPE));
+        assertFalse(kh.escape, "ESC release should set escape=false");
+    }
+
+    @Test
+    void testKeyHandlerKeyTypedDoesNotThrow() {
+        KeyHandler kh = new KeyHandler();
+        assertDoesNotThrow(() -> kh.keyTyped(makeKey(KeyEvent.KEY_TYPED, KeyEvent.VK_UNDEFINED)));
     }
 
     // ── Observer pattern ────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 package pyramidrunner.core;
 
 import java.io.Serializable;
+import java.util.Locale;
 
 /**
  * Stores one completed run: player name + time in milliseconds.
@@ -34,6 +35,7 @@ public final class HighScore implements Serializable {
     /** Returns something like "Player - 12.3 s" */
     @Override
     public String toString() {
-        return playerName + " – " + String.format("%.1f s", timeMs / 1000.0);
+        // Locale.US ensures decimal point is "." regardless of system locale
+        return playerName + " – " + String.format(Locale.US, "%.1f s", timeMs / 1000.0);
     }
 }
