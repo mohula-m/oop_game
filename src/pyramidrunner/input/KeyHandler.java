@@ -5,7 +5,7 @@ import java.awt.event.KeyListener;
 
 public class KeyHandler implements KeyListener {
 
-    public boolean left, right, jump, restart;
+    public boolean left, right, jump, restart, escape;
 
     @Override
     public void keyPressed(KeyEvent e) {
@@ -14,6 +14,7 @@ public class KeyHandler implements KeyListener {
             case KeyEvent.VK_A, KeyEvent.VK_LEFT                  -> left    = true;
             case KeyEvent.VK_D, KeyEvent.VK_RIGHT                 -> right   = true;
             case KeyEvent.VK_R                                    -> restart = true;
+            case KeyEvent.VK_ESCAPE                               -> escape  = true;
         }
     }
 
@@ -24,6 +25,7 @@ public class KeyHandler implements KeyListener {
             case KeyEvent.VK_A, KeyEvent.VK_LEFT                  -> left    = false;
             case KeyEvent.VK_D, KeyEvent.VK_RIGHT                 -> right   = false;
             case KeyEvent.VK_R                                    -> restart = false;
+            case KeyEvent.VK_ESCAPE                               -> escape  = false;
         }
     }
 

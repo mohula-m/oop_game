@@ -9,6 +9,9 @@ import pyramidrunner.entity.Barrier;
 import pyramidrunner.entity.Door;
 import pyramidrunner.entity.Player;
 import pyramidrunner.input.KeyHandler;
+import pyramidrunner.world.Level1;
+import pyramidrunner.world.Level2;
+import pyramidrunner.world.Level3;
 import pyramidrunner.world.TileMap;
 
 import javax.swing.JPanel;
@@ -18,158 +21,127 @@ import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Main game panel — handles the game loop, update logic, and rendering.
+ * Main game panel — game loop, update logic, and rendering.
  *
- * <p>Implements {@link Runnable} so the game loop runs on a dedicated thread.</p>
+ * <p>Supports three levels ({@link Level1}, {@link Level2}, {@link Level3}).
+ * Completing a level advances to the next; finishing all three or pressing
+ * ESC returns to {@link MenuPanel} via the {@code returnToMenu} callback.</p>
  *
- * <p><b>Generics:</b> barriers are stored in an {@link EntityGroup}{@code <Barrier>}
- * — a bounded generic container ({@code T extends Entity}) that provides type-safe
- * bulk {@code updateAll()}, {@code drawAll()}, and {@code stream()} operations.</p>
- *
- * <p><b>Design pattern — Observer:</b> {@code GamePanel} implements
- * {@link GameEventListener} and registers itself with {@link Door} (Subject).
- * On level completion the door fires {@link GameEventType#LEVEL_COMPLETE} and
- * {@code GamePanel} records the run time via the {@link ScoreManager} Singleton.</p>
- *
- * <p><b>Design pattern — Singleton:</b> {@link ScoreManager#getInstance()} provides
- * the single application-wide score repository; the panel never constructs it
- * directly.</p>
- *
- * <p><b>Serialization:</b> completed runs are saved to disk as
- * {@link HighScore} objects (implements {@link java.io.Serializable})
- * through {@link ScoreManager}.</p>
- *
- * <p>Composition: GamePanel creates and owns TileMap, Player, Door,
- * and the EntityGroup of Barriers.</p>
+ * <p><b>Generics:</b> barriers stored in {@link EntityGroup}{@code <Barrier>}.</p>
+ * <p><b>Observer:</b> implements {@link GameEventListener}; {@link Door} is Subject.</p>
+ * <p><b>Singleton:</b> scores persisted via {@link ScoreManager#getInstance()}.</p>
+ * <p><b>Serialization:</b> run times saved as {@link HighScore} objects.</p>
  */
 public class GamePanel extends JPanel implements Runnable, GameEventListener {
 
-    /** Logger for this class — three levels used: INFO, FINE, SEVERE. */
-    private static final Logger LOGGER = Logger.getLogger(GamePanel.class.getName());
+    private static final Logger LOGGER =
+            Logger.getLogger(GamePanel.class.getName());
 
-    /** Target frames per second. */
-    private static final int FPS = 90;
-
-    /** Player starting X in pixels. */
+    private static final int FPS            = 90;
     private static final int PLAYER_START_X = TileMap.TILE_SIZE + 2;
-    /** Player starting Y in pixels (row 14, just above the floor). */
     private static final int PLAYER_START_Y = 14 * TileMap.TILE_SIZE - 44;
+
+    /**
+     * All available levels — polymorphism: GamePanel works against the
+     * abstract {@code pyramidrunner.world.Level} type, never against
+     * concrete subclasses directly.
+     */
+    private static final pyramidrunner.world.Level[] ALL_LEVELS =
+            { new Level1(), new Level2(), new Level3() };
 
     private Thread gameThread;
 
-    // Composition: all game objects created and owned here
-    private final KeyHandler           keyHandler = new KeyHandler();
-    private final TileMap              tileMap;
-    private       Player               player;
-    private final Door                 door;
-    private final EntityGroup<Barrier> barriers;
+    // ── Input (shared across level loads) ─────────────────────────────────
+    private final KeyHandler keyHandler = new KeyHandler();
 
-    /** Singleton score repository — obtained once, reused throughout. */
+    // ── Game world (rebuilt on every loadLevel call) ───────────────────────
+    private TileMap              tileMap;
+    private Player               player;
+    private Door                 door;
+    private EntityGroup<Barrier> barriers;
+
+    // ── Level state ────────────────────────────────────────────────────────
+    private int     currentLevelIndex = 0;
+    private boolean gameOver          = false;
+
+    // ── Scoring ────────────────────────────────────────────────────────────
     private final ScoreManager scoreManager = ScoreManager.getInstance();
+    private long roundStartTime = 0;
+    private long lastRunTimeMs  = 0;
 
-    /** System time (ms) when the current round started — used to compute score. */
-    private long roundStartTime;
-
-    /** Elapsed ms of the last completed run — shown in the overlay. */
-    private long lastRunTimeMs = 0;
-
-    /** True when a barrier has hit the player. Stops updates, shows overlay. */
-    private boolean gameOver = false;
+    /** Invoked when the player presses ESC or completes all three levels. */
+    private final Runnable returnToMenu;
 
     /**
-     * Constructs the game panel, initialises all game objects, and
-     * registers this panel as an Observer of the exit door.
+     * @param startLevel   1-based level number to begin on (1, 2, or 3)
+     * @param returnToMenu callback invoked to return to the menu screen
      */
-    public GamePanel() {
-        tileMap  = new TileMap();
-        player   = new Player(PLAYER_START_X, PLAYER_START_Y, keyHandler, tileMap);
-        door     = new Door(22, 1);
-        barriers = createBarriers();
+    public GamePanel(int startLevel, Runnable returnToMenu) {
+        this.returnToMenu      = returnToMenu;
+        this.currentLevelIndex = Math.max(0, Math.min(startLevel - 1, ALL_LEVELS.length - 1));
 
-        // Observer registration: GamePanel listens for door events
-        door.addListener(this);
-
-        roundStartTime = System.currentTimeMillis();
-
-        setPreferredSize(new Dimension(tileMap.getPixelWidth(), tileMap.getPixelHeight()));
+        setPreferredSize(new Dimension(24 * TileMap.TILE_SIZE, 16 * TileMap.TILE_SIZE));
         setBackground(Color.DARK_GRAY);
         setFocusable(true);
         addKeyListener(keyHandler);
 
-        LOGGER.info("GamePanel initialised — " + barriers.size() + " barriers loaded.");
+        loadLevel(currentLevelIndex);
     }
 
-    // ── Observer callback ──────────────────────────────────────────────────
+    // ── Observer ───────────────────────────────────────────────────────────
 
     /**
-     * Called by the door (Subject) when a game event fires.
-     *
-     * <p>On {@link GameEventType#LEVEL_COMPLETE}: calculates elapsed time,
-     * creates a {@link HighScore} (Serializable), and persists it via the
-     * {@link ScoreManager} Singleton.</p>
-     *
-     * @param event the event received from the Subject
+     * Receives {@link GameEventType#LEVEL_COMPLETE} from the Door (Subject).
+     * Records elapsed time as a {@link HighScore} via the Singleton {@link ScoreManager}.
      */
     @Override
     public void onGameEvent(GameEvent event) {
         if (event.getType() == GameEventType.LEVEL_COMPLETE) {
             lastRunTimeMs = System.currentTimeMillis() - roundStartTime;
-            HighScore hs = new HighScore("Player", lastRunTimeMs);
+            HighScore hs  = new HighScore("Player", lastRunTimeMs);
             scoreManager.addScore(hs);
-            LOGGER.info("Observer notified — Level complete! Time: "
-                        + hs + " | " + event.getMessage());
-        } else if (event.getType() == GameEventType.GAME_OVER) {
-            LOGGER.info("Observer notified — Game over! " + event.getMessage());
+            LOGGER.info("Level " + (currentLevelIndex + 1) + " complete — " + hs);
         }
     }
 
-    // ── Game object setup ──────────────────────────────────────────────────
+    // ── Level loading ──────────────────────────────────────────────────────
 
     /**
-     * Creates and returns an {@link EntityGroup}{@code <Barrier>} containing
-     * all level barriers.
+     * Rebuilds the entire game world for the level at {@code index}.
+     * Every object (tileMap, player, door, barriers) is replaced.
      *
-     * @return populated generic barrier group
+     * @param index 0-based index into {@link #ALL_LEVELS}
      */
-    private EntityGroup<Barrier> createBarriers() {
-        int ts = TileMap.TILE_SIZE;
-        EntityGroup<Barrier> group = new EntityGroup<>();
-        group.add(new Barrier(5  * ts, 4  * ts - 36, 20, 36, 20 * ts, 2.5f));
-        group.add(new Barrier(3  * ts, 8  * ts - 36, 20, 36, 18 * ts, 2.0f));
-        group.add(new Barrier(2  * ts, 12 * ts - 36, 16, 36, 14 * ts, 3.5f));
-        group.add(new Barrier(3  * ts, 10 * ts - 36, 20, 36, 19 * ts, 4.0f));
-        return group;
-    }
+    private void loadLevel(int index) {
+        currentLevelIndex = index;
+        pyramidrunner.world.Level level = ALL_LEVELS[index];
 
-    /**
-     * Resets the game to its initial state and restarts the timer.
-     */
-    private void resetGame() {
-        player         = new Player(PLAYER_START_X, PLAYER_START_Y, keyHandler, tileMap);
-        door.reset();
+        tileMap  = new TileMap(level.getMap());
+        player   = new Player(PLAYER_START_X, PLAYER_START_Y, keyHandler, tileMap);
+        door     = new Door(level.getDoorCol(), level.getDoorRow());
+        barriers = new EntityGroup<>();
+        level.setupBarriers(barriers, TileMap.TILE_SIZE);
+
+        door.addListener(this);      // Observer: subscribe to door events
         gameOver       = false;
         roundStartTime = System.currentTimeMillis();
-        LOGGER.info("Game reset — new round started.");
+
+        LOGGER.info("Loaded Level " + level.getLevelNumber()
+                    + " – " + level.getLevelName()
+                    + "  (" + barriers.size() + " barriers)");
     }
 
-    // ── Thread / game loop ─────────────────────────────────────────────────
+    // ── Thread ─────────────────────────────────────────────────────────────
 
-    /**
-     * Starts the game loop on a new thread.
-     */
+    /** Starts the 90-FPS game loop on a dedicated thread. */
     public void startGameThread() {
         gameThread = new Thread(this);
         gameThread.start();
-        LOGGER.info("Game thread started.");
     }
 
-    /**
-     * Game loop — runs at 90 FPS using a delta-time accumulator.
-     */
     @Override
     public void run() {
         double drawInterval = 1_000_000_000.0 / FPS;
@@ -180,54 +152,65 @@ public class GamePanel extends JPanel implements Runnable, GameEventListener {
             long now = System.nanoTime();
             delta   += (now - lastTime) / drawInterval;
             lastTime = now;
-
-            if (delta >= 1) {
-                update();
-                repaint();
-                delta--;
-            }
+            if (delta >= 1) { update(); repaint(); delta--; }
         }
     }
 
     // ── Update ─────────────────────────────────────────────────────────────
 
-    /**
-     * Advances the game by one frame.
-     */
     private void update() {
-        if ((gameOver || door.isTriggered()) && keyHandler.restart) {
-            resetGame();
+
+        // ESC → return to menu from anywhere
+        if (keyHandler.escape) {
+            gameThread = null;
+            returnToMenu.run();
             return;
         }
+
+        // Game over: R restarts the same level
+        if (gameOver && keyHandler.restart) {
+            loadLevel(currentLevelIndex);
+            return;
+        }
+
+        // Level complete: R advances (or finishes the game)
+        if (door.isTriggered() && keyHandler.restart) {
+            int next = currentLevelIndex + 1;
+            if (next >= ALL_LEVELS.length) {
+                gameThread = null;
+                returnToMenu.run();
+            } else {
+                loadLevel(next);
+            }
+            return;
+        }
+
         if (gameOver || door.isTriggered()) return;
 
+        // Normal frame ─────────────────────────────────────────────────────
         barriers.updateAll();
-
-        LOGGER.fine("Player pos: x=" + player.getX() + " y=" + player.getY());
-
+        LOGGER.fine("Player: x=" + player.getX() + " y=" + player.getY());
         player.update();
 
+        // Lambda: check if any barrier hit the player
         boolean hit = barriers.stream().anyMatch(b -> b.hitsPlayer(player));
         if (hit) {
             try {
                 throw new PlayerCollisionException(player.getX(), player.getY());
             } catch (PlayerCollisionException e) {
-                LOGGER.log(Level.SEVERE, "Barrier collision: " + e.getMessage());
+                LOGGER.log(java.util.logging.Level.SEVERE,
+                           "Barrier collision: " + e.getMessage());
                 gameOver = true;
             }
         }
 
-        if (door.isTriggered()) return;
-        door.checkPlayer(player);
+        if (!door.isTriggered()) {
+            door.checkPlayer(player);
+        }
     }
 
     // ── Rendering ──────────────────────────────────────────────────────────
 
-    /**
-     * Renders the current frame.
-     *
-     * @param g Swing graphics context
-     */
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
@@ -239,37 +222,49 @@ public class GamePanel extends JPanel implements Runnable, GameEventListener {
         door.draw(g2);
         player.draw(g2);
 
+        drawHud(g2);
+
         if (gameOver) {
-            drawOverlay(g2, Color.RED, "GAME OVER", "Press R to restart");
-        }
-        if (door.isTriggered()) {
-            String timeStr = String.format("%.1f s", lastRunTimeMs / 1000.0);
-            drawOverlay(g2, Color.YELLOW, "LEVEL COMPLETE!", "Time: " + timeStr + "   Press R to play again");
+            drawOverlay(g2, Color.RED,
+                    "GAME OVER",
+                    "R — try again     ESC — menu");
+        } else if (door.isTriggered()) {
+            boolean last    = (currentLevelIndex == ALL_LEVELS.length - 1);
+            String  timeStr = String.format("%.1f s", lastRunTimeMs / 1000.0);
+            String  subMsg  = last
+                    ? "YOU WIN ALL LEVELS!   R — back to menu"
+                    : "Time: " + timeStr + "   R — Level " + (currentLevelIndex + 2) + "   ESC — menu";
+            drawOverlay(g2, Color.YELLOW,
+                    "LEVEL " + (currentLevelIndex + 1) + " COMPLETE!",
+                    subMsg);
         }
 
         g2.dispose();
     }
 
-    /**
-     * Draws a semi-transparent overlay with a centred title and subtitle.
-     *
-     * @param g2       Graphics2D context
-     * @param color    title text colour
-     * @param title    main message
-     * @param subtitle smaller hint below the title
-     */
+    /** Small top-left HUD: level name + ESC hint. */
+    private void drawHud(Graphics2D g2) {
+        pyramidrunner.world.Level lv = ALL_LEVELS[currentLevelIndex];
+        g2.setColor(new Color(255, 255, 255, 180));
+        g2.setFont(new Font("Arial", Font.BOLD, 16));
+        g2.drawString("Level " + lv.getLevelNumber() + " – " + lv.getLevelName(), 10, 22);
+        g2.setFont(new Font("Arial", Font.PLAIN, 14));
+        g2.drawString("ESC = menu", 10, 40);
+    }
+
+    /** Semi-transparent centred overlay with title and subtitle. */
     private void drawOverlay(Graphics2D g2, Color color, String title, String subtitle) {
         g2.setColor(new Color(0, 0, 0, 170));
         g2.fillRect(0, 0, getWidth(), getHeight());
 
         g2.setColor(color);
         g2.setFont(new Font("Arial", Font.BOLD, 52));
-        int titleX = (getWidth() - g2.getFontMetrics().stringWidth(title)) / 2;
-        g2.drawString(title, titleX, getHeight() / 2 - 20);
+        int tx = (getWidth() - g2.getFontMetrics().stringWidth(title)) / 2;
+        g2.drawString(title, tx, getHeight() / 2 - 20);
 
         g2.setColor(Color.WHITE);
         g2.setFont(new Font("Arial", Font.PLAIN, 22));
-        int subX = (getWidth() - g2.getFontMetrics().stringWidth(subtitle)) / 2;
-        g2.drawString(subtitle, subX, getHeight() / 2 + 30);
+        int sx = (getWidth() - g2.getFontMetrics().stringWidth(subtitle)) / 2;
+        g2.drawString(subtitle, sx, getHeight() / 2 + 30);
     }
 }
