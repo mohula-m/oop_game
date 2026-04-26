@@ -1,26 +1,25 @@
 package pyramidrunner.core;
 
 /**
- * Subject (publisher) interface for the Observer design pattern.
+ * Subject (publisher) interface for the Observer pattern.
  *
- * <p>Any game object that can fire events implements this interface so that
- * interested parties ({@link GameEventListener} implementations) can
- * subscribe and unsubscribe at runtime without the source knowing anything
- * about the consumers — full decoupling.</p>
+ * Implemented by game objects that fire events (currently Door).
+ * Listeners can subscribe/unsubscribe at any time without the source
+ * needing to know anything about them.
  */
 public interface GameEventSource {
 
     /**
-     * Registers an observer to receive future events from this source.
+     * Registers a listener to receive future events from this source.
      *
-     * @param listener the observer to add; ignored if already registered
+     * @param listener the observer to add
      */
     void addListener(GameEventListener listener);
 
     /**
-     * Unregisters a previously added observer.
+     * Removes a previously registered listener.
      *
-     * @param listener the observer to remove; no-op if not found
+     * @param listener the observer to remove
      */
     void removeListener(GameEventListener listener);
 }

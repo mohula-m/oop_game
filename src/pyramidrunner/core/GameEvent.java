@@ -1,37 +1,31 @@
 package pyramidrunner.core;
 
 /**
- * Immutable value object that carries information about a game event.
+ * Carries information about a game event from a Subject to its Observers.
  *
- * <p>Part of the Observer design pattern — passed from a <em>Subject</em>
- * (e.g. {@code Door}) to every registered {@link GameEventListener}
- * whenever a noteworthy game event occurs.</p>
- *
- * <p>Encapsulation: all fields are {@code private final}; access is
- * provided only through getters.</p>
+ * Immutable - all fields are set in the constructor and never change.
+ * Part of the Observer pattern: Door creates a GameEvent and passes it
+ * to all registered GameEventListeners.
  */
 public final class GameEvent {
 
-    /** Category of the event. */
     private final GameEventType type;
-
-    /** Human-readable description of what happened. */
     private final String message;
 
     /**
-     * Constructs a new game event.
+     * Creates a new game event.
      *
-     * @param type    the kind of event that occurred
-     * @param message a short description (used for logging / display)
+     * @param type    what kind of event happened
+     * @param message short description (used for logging)
      */
     public GameEvent(GameEventType type, String message) {
         this.type    = type;
         this.message = message;
     }
 
-    /** @return the category of this event */
+    /** @return the type of this event */
     public GameEventType getType()    { return type; }
 
-    /** @return human-readable event description */
+    /** @return human-readable description */
     public String        getMessage() { return message; }
 }

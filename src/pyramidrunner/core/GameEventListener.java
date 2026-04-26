@@ -1,24 +1,24 @@
 package pyramidrunner.core;
 
 /**
- * Observer interface for the game-event notification system.
+ * Observer interface for the game event system.
  *
- * <p><b>Design pattern — Observer:</b> any class that wants to react to
- * in-game events (level complete, game over, …) implements this interface
- * and registers itself with a {@link GameEventSource}.  The source calls
- * {@link #onGameEvent(GameEvent)} whenever an event fires, completely
- * decoupling the event producer from its consumers.</p>
+ * Any class that wants to react to events (level complete, game over)
+ * implements this interface and registers with a GameEventSource.
+ * The source then calls onGameEvent() when something happens.
  *
- * <p>Example implementors: {@code GamePanel} (updates UI state),
- * future leaderboard or analytics classes.</p>
+ * Design pattern: Observer - listener doesn't know who fires the event,
+ * and the source doesn't know who is listening.
+ *
+ * Marked @FunctionalInterface so it can also be used as a lambda.
  */
 @FunctionalInterface
 public interface GameEventListener {
 
     /**
-     * Called by the Subject when a game event occurs.
+     * Called when a game event is fired.
      *
-     * @param event the event that was fired; never {@code null}
+     * @param event the event that occurred (never null)
      */
     void onGameEvent(GameEvent event);
 }

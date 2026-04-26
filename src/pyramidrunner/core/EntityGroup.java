@@ -11,113 +11,94 @@ import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 /**
- * A generic, type-safe container for homogeneous groups of game entities.
+ * Generic container for a group of game entities of the same type.
  *
- * <p><b>Generics — bounded type parameter:</b> {@code T extends Entity} guarantees
- * that every element in the group has {@link Entity#update()} and
- * {@link Drawable#draw(Graphics2D)} available, so the group can call those
- * operations on all members without casting.</p>
+ * The type parameter T extends Entity, so the group can call update()
+ * and draw() on all elements without casting. This is the main point
+ * of using generics here - type safety + reusability.
  *
- * <p>This class replaces raw {@code List<Barrier>} in {@code GamePanel} with a
- * reusable, self-contained unit that handles update, draw, and stream operations
- * for any {@link Entity} subtype.</p>
+ * Used in GamePanel as EntityGroup&lt;Barrier&gt; to manage all barriers.
  *
- * <p>Encapsulation: the internal list is {@code private}; callers access
- * contents only through the provided methods.</p>
- *
- * @param <T> the concrete {@link Entity} subtype stored in this group
+ * @param <T> any subclass of Entity (e.g. Barrier, Door, ...)
  */
 public class EntityGroup<T extends Entity> {
 
-    /** Internal storage — never exposed directly. */
     private final List<T> entities = new ArrayList<>();
 
-    // ── Mutation ───────────────────────────────────────────────────────────
+    // -- Adding / removing --
 
-    /**
-     * Adds an entity to this group.
-     *
-     * @param entity entity to add; must not be {@code null}
-     */
+    /** Adds an entity to the group. */
     public void add(T entity) {
         entities.add(entity);
     }
 
     /**
-     * Removes a specific entity from this group.
+     * Removes a specific entity.
      *
-     * @param entity entity to remove
-     * @return {@code true} if the entity was present and removed
+     * @return true if it was found and removed
      */
     public boolean remove(T entity) {
         return entities.remove(entity);
     }
 
     /**
-     * Removes all entities that satisfy the given predicate.
+     * Removes all entities that match the predicate.
+     * Example: group.removeIf(b -> b.getX() > 1000)
      *
-     * <p>Example: {@code group.removeIf(b -> b.getX() > 1000)}</p>
-     *
-     * @param predicate test applied to each element
+     * @param predicate condition to test each entity
      */
     public void removeIf(Predicate<T> predicate) {
         entities.removeIf(predicate);
     }
 
-    // ── Bulk operations ────────────────────────────────────────────────────
+    // -- Bulk operations --
 
-    /**
-     * Calls {@link Entity#update()} on every entity in this group.
-     * Equivalent to {@code entities.forEach(Entity::update)} but semantically named.
-     */
+    /** Calls update() on every entity in the group. */
     public void updateAll() {
         entities.forEach(Updatable::update);
     }
 
     /**
-     * Calls {@link Drawable#draw(Graphics2D)} on every entity in this group.
+     * Calls draw(g) on every entity in the group.
      *
-     * @param g the Graphics2D context
+     * @param g graphics context
      */
     public void drawAll(Graphics2D g) {
         entities.forEach(e -> e.draw(g));
     }
 
     /**
-     * Applies {@code action} to every entity in this group.
-     * Delegates to {@link List#forEach} — works with lambda expressions and
-     * method references.
+     * Applies an action to every entity (works with lambdas).
      *
-     * @param action action to perform on each element
+     * @param action what to do with each entity
      */
     public void forEach(Consumer<T> action) {
         entities.forEach(action);
     }
 
-    // ── Query ──────────────────────────────────────────────────────────────
+    // -- Queries --
 
     /**
-     * Returns a sequential {@link Stream} over the entities.
-     * Callers can use it with {@code anyMatch}, {@code filter}, {@code map}, etc.
+     * Returns a Stream so you can use anyMatch, filter, etc.
      *
-     * @return stream of the stored entities
+     * @return stream over the stored entities
      */
     public Stream<T> stream() {
         return entities.stream();
     }
 
     /**
-     * Returns an unmodifiable view of the internal list.
+     * Returns a read-only view of the list.
      *
-     * @return read-only list of entities
+     * @return unmodifiable list
      */
     public List<T> getAll() {
         return Collections.unmodifiableList(entities);
     }
 
-    /** @return number of entities currently in this group */
+    /** @return number of entities in this group */
     public int size() { return entities.size(); }
 
-    /** @return {@code true} if this group contains no entities */
+    /** @return true if the group is empty */
     public boolean isEmpty() { return entities.isEmpty(); }
 }

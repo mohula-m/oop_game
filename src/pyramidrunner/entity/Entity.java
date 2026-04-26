@@ -6,28 +6,25 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 
 /**
- * Abstract base class for all game objects — demonstrates Generalization.
+ * Base class for all game objects (player, door, barrier).
+ * Uses Generalization - everything in the game inherits from here.
  *
- * <p>Implements {@link pyramidrunner.core.Drawable} and {@link pyramidrunner.core.Updatable}
- * interfaces, enforcing that every concrete entity provides both rendering
- * and update logic (Abstraction).</p>
+ * Implements Drawable and Updatable interfaces so every subclass
+ * is forced to provide draw() and update() methods (Abstraction).
  *
- * <p>All positional fields are {@code protected} so subclasses can access them
- * directly without getters — Encapsulation: external code uses getters only.</p>
+ * Fields are protected so subclasses can use x, y, width, height directly,
+ * but outside code can only read them via getters (Encapsulation).
  */
 public abstract class Entity implements Drawable, Updatable {
 
-    /** X position in pixels (left edge). Encapsulated — only subclasses access directly. */
+    // protected so subclasses like Player, Door, Barrier can access directly
     protected int x;
-    /** Y position in pixels (top edge). Encapsulated — only subclasses access directly. */
     protected int y;
-    /** Width in pixels. Encapsulated. */
     protected int width;
-    /** Height in pixels. Encapsulated. */
     protected int height;
 
     /**
-     * Initialises position and size.
+     * Sets the position and size of this entity.
      *
      * @param x      left edge in pixels
      * @param y      top edge in pixels
@@ -41,38 +38,17 @@ public abstract class Entity implements Drawable, Updatable {
         this.height = height;
     }
 
-    /**
-     * Advances this entity's state by one game frame.
-     * Overriding required by Updatable — run-time polymorphism.
-     */
-    @Override
-    public abstract void update();
+    // Abstract methods - every subclass must override these (polymorphism)
+    @Override public abstract void update();
+    @Override public abstract void draw(Graphics2D g);
+    @Override public abstract void draw(Graphics2D g, Color color); // overloaded version
 
     /**
-     * Draws this entity with its default appearance.
-     * Overriding required by Drawable — run-time polymorphism.
+     * Simple AABB collision check between this entity and another.
+     * Used by Door.checkPlayer() and Barrier.hitsPlayer().
      *
-     * @param g the Graphics2D context
-     */
-    @Override
-    public abstract void draw(Graphics2D g);
-
-    /**
-     * Draws this entity with a custom colour override.
-     * Overloading draw() — compile-time polymorphism.
-     *
-     * @param g     the Graphics2D context
-     * @param color colour to use instead of the default
-     */
-    @Override
-    public abstract void draw(Graphics2D g, Color color);
-
-    /**
-     * Returns true if this entity's bounding box overlaps another entity's.
-     * Shared collision utility available to all subclasses.
-     *
-     * @param other the entity to test against
-     * @return true if the two bounding boxes intersect
+     * @param other the other entity to check against
+     * @return true if bounding boxes overlap
      */
     public boolean intersects(Entity other) {
         return x < other.x + other.width
@@ -81,12 +57,8 @@ public abstract class Entity implements Drawable, Updatable {
             && y + height > other.y;
     }
 
-    /** @return X position (left edge) in pixels */
     public int getX()      { return x; }
-    /** @return Y position (top edge) in pixels */
     public int getY()      { return y; }
-    /** @return width in pixels */
     public int getWidth()  { return width; }
-    /** @return height in pixels */
     public int getHeight() { return height; }
 }

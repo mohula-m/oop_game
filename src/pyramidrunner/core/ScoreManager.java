@@ -14,35 +14,25 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Manages the persistent high-score leaderboard.
+ * Stores and loads the top 5 best completion times.
  *
- * <p><b>Design pattern — Singleton:</b> exactly one {@code ScoreManager} exists
- * for the lifetime of the application.  Clients obtain it via
- * {@link #getInstance()} — the constructor is private.</p>
- *
- * <p><b>Serialization:</b> the leaderboard is stored as a serialized
- * {@code List<HighScore>} on disk ({@value #FILE_PATH}).  If the file is absent
- * or corrupt the manager silently starts with an empty list.</p>
- *
- * <p>Generics: the internal list is typed {@code List<HighScore>}, and
- * {@link Collections#sort} is used with a lambda {@link Comparator}.</p>
+ * Singleton pattern - only one instance exists in the whole program.
+ * Scores are saved to scores.dat using Java serialization.
+ * If the file doesn't exist yet, starts with an empty list.
  */
 public final class ScoreManager {
 
-    private static final Logger LOGGER    = Logger.getLogger(ScoreManager.class.getName());
-    private static final String FILE_PATH = "scores.dat";
+    private static final Logger LOGGER     = Logger.getLogger(ScoreManager.class.getName());
+    private static final String FILE_PATH  = "scores.dat";
     private static final int    MAX_SCORES = 5;
 
-    // ── Singleton ──────────────────────────────────────────────────────────
-
-    /** The single shared instance. Lazily initialised; guarded by class-load. */
+    // Singleton - only one instance allowed
     private static ScoreManager instance;
 
     /**
-     * Returns the application-wide {@code ScoreManager} instance.
-     * Creates it on the first call (lazy initialisation).
+     * Returns the single instance (creates it on first call).
      *
-     * @return the singleton instance
+     * @return the shared ScoreManager
      */
     public static ScoreManager getInstance() {
         if (instance == null) {
@@ -51,81 +41,65 @@ public final class ScoreManager {
         return instance;
     }
 
-    /**
-     * Resets the singleton — intended for unit tests only.
-     * Calling this in production code produces undefined behaviour.
-     */
+    /** Only used in unit tests to reset state between test runs. */
     public static void resetForTesting() {
         instance = null;
     }
 
-    // ── State ──────────────────────────────────────────────────────────────
-
-    /** In-memory leaderboard; loaded from disk on construction. */
+    // list of scores kept in memory (also saved to file)
     private final List<HighScore> scores;
 
-    /** Private constructor — enforces Singleton. */
+    // private constructor - part of Singleton pattern
     private ScoreManager() {
         scores = loadFromDisk();
-        LOGGER.info("ScoreManager initialised with " + scores.size() + " stored scores.");
+        LOGGER.info("ScoreManager ready, loaded " + scores.size() + " scores.");
     }
 
-    // ── Public API ─────────────────────────────────────────────────────────
-
     /**
-     * Adds a new score to the leaderboard, keeps only the fastest
-     * {@value #MAX_SCORES} entries, and persists the updated list to disk.
+     * Adds a score, keeps only top 5 sorted by time, saves to disk.
      *
-     * @param score the score to record; must not be {@code null}
+     * @param score the completed run to save
      */
     public void addScore(HighScore score) {
         scores.add(score);
-        // Lambda comparator: sort ascending by time (fastest first)
+        // lambda comparator - sort fastest first
         scores.sort(Comparator.comparingLong(HighScore::getTimeMs));
         if (scores.size() > MAX_SCORES) {
             scores.subList(MAX_SCORES, scores.size()).clear();
         }
         saveToDisk();
-        LOGGER.info("Score recorded: " + score);
+        LOGGER.info("New score: " + score);
     }
 
     /**
-     * Returns an unmodifiable view of the current top scores (fastest first).
+     * Returns the top scores list (read-only).
      *
-     * @return read-only ordered list of high scores
+     * @return unmodifiable list ordered fastest first
      */
     public List<HighScore> getTopScores() {
         return Collections.unmodifiableList(scores);
     }
 
-    /** @return number of scores currently on the leaderboard */
+    /** @return how many scores are currently stored */
     public int size() { return scores.size(); }
 
-    /** Clears all in-memory scores (does not touch the file). */
+    /** Removes all scores from memory (does not delete the file). */
     public void clearScores() { scores.clear(); }
 
-    // ── Serialization (file I/O) ───────────────────────────────────────────
+    // -- Serialization --
 
-    /**
-     * Serializes the leaderboard to {@value #FILE_PATH}.
-     * Logs a SEVERE message and continues silently on failure.
-     */
+    /** Writes the score list to scores.dat using Java object serialization. */
     private void saveToDisk() {
         try (ObjectOutputStream oos =
                      new ObjectOutputStream(new FileOutputStream(FILE_PATH))) {
             oos.writeObject(new ArrayList<>(scores));
-            LOGGER.fine("Scores saved to " + FILE_PATH);
+            LOGGER.fine("Saved scores to " + FILE_PATH);
         } catch (IOException e) {
-            LOGGER.log(Level.SEVERE, "Failed to save scores: " + e.getMessage());
+            LOGGER.log(Level.SEVERE, "Could not save scores: " + e.getMessage());
         }
     }
 
-    /**
-     * Deserializes the leaderboard from {@value #FILE_PATH}.
-     * Returns an empty list if the file does not exist or cannot be read.
-     *
-     * @return loaded list of high scores, or an empty list on failure
-     */
+    /** Reads scores.dat back into memory. Returns empty list if file is missing. */
     @SuppressWarnings("unchecked")
     private List<HighScore> loadFromDisk() {
         File file = new File(FILE_PATH);
@@ -133,10 +107,10 @@ public final class ScoreManager {
         try (ObjectInputStream ois =
                      new ObjectInputStream(new FileInputStream(file))) {
             List<HighScore> loaded = (List<HighScore>) ois.readObject();
-            LOGGER.fine("Scores loaded from " + FILE_PATH);
+            LOGGER.fine("Loaded scores from " + FILE_PATH);
             return loaded;
         } catch (IOException | ClassNotFoundException e) {
-            LOGGER.log(Level.SEVERE, "Failed to load scores: " + e.getMessage());
+            LOGGER.log(Level.SEVERE, "Could not load scores: " + e.getMessage());
             return new ArrayList<>();
         }
     }
